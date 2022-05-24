@@ -29,12 +29,12 @@ import org.apache.rocketmq.common.message.MessageExt;
 public class Consumer {
 
     public static void main(String[] args) throws MQClientException {
-        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("please_rename_unique_group_name_3");
-
+        DefaultMQPushConsumer consumer = new DefaultMQPushConsumer("order_group");
+        consumer.setNamesrvAddr("127.0.0.1:9876");
         consumer.setConsumeFromWhere(ConsumeFromWhere.CONSUME_FROM_FIRST_OFFSET);
 
-        consumer.subscribe("TopicTest", "TagA || TagC || TagD");
-
+        consumer.subscribe("orderTopic", "TagA");
+        //确保一个queue只被一个线程消费
         consumer.registerMessageListener(new MessageListenerOrderly() {
             AtomicLong consumeTimes = new AtomicLong(0);
 
@@ -53,7 +53,7 @@ public class Consumer {
                 return ConsumeOrderlyStatus.SUCCESS;
             }
         });
-
+        //启动消费者
         consumer.start();
         System.out.printf("Consumer Started.%n");
     }
