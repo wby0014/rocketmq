@@ -507,6 +507,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
         this.pause = false;
         doRebalance();
         log.info("resume this consumer, {}", this.defaultMQPushConsumer.getConsumerGroup());
+
     }
 
     public void sendMessageBack(MessageExt msg, int delayLevel, final String brokerName)
