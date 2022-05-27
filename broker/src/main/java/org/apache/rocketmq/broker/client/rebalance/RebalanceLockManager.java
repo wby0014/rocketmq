@@ -114,6 +114,13 @@ public class RebalanceLockManager {
         return false;
     }
 
+    /**
+     * broker端对消息队列加锁实现
+     * @param group
+     * @param mqs
+     * @param clientId
+     * @return
+     */
     public Set<MessageQueue> tryLockBatch(final String group, final Set<MessageQueue> mqs,
         final String clientId) {
         Set<MessageQueue> lockedMqs = new HashSet<MessageQueue>(mqs.size());

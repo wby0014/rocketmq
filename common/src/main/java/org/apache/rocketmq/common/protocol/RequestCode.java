@@ -62,6 +62,7 @@ public class RequestCode {
 
     public static final int NOTIFY_CONSUMER_IDS_CHANGED = 40;
 
+    // 顺序消息锁定消息队列code码
     public static final int LOCK_BATCH_MQ = 41;
 
     public static final int UNLOCK_BATCH_MQ = 42;
