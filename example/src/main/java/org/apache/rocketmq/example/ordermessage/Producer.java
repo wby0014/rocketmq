@@ -48,7 +48,7 @@ public class Producer {
                     }
                 }, orderId);
 
-                System.out.println("订单id:" + orderId + "  发送结果:" + sendResult);
+                System.out.println("订单id:" + orderId + " " + list.get(i).getMsg() + " 发送结果:" + sendResult);
             }
             //关闭生产者
             producer.shutdown();
