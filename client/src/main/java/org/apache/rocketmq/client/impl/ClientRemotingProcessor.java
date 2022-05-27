@@ -64,6 +64,14 @@ public class ClientRemotingProcessor extends AsyncNettyRequestProcessor implemen
         this.mqClientFactory = mqClientFactory;
     }
 
+    /**
+     * 事务回查命令的最终处理者为ClientRemotingProssor的processRequest方法，最终将任务提交到TransactionMQProducer的线程池中执行，
+     * 最终调用应用程序实现的Transaction Listener的checkLocalTransaction方法，返回事务状态
+     * @param ctx
+     * @param request
+     * @return
+     * @throws RemotingCommandException
+     */
     @Override
     public RemotingCommand processRequest(ChannelHandlerContext ctx,
         RemotingCommand request) throws RemotingCommandException {

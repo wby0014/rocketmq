@@ -317,9 +317,11 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             msgInner.setPropertiesString(MessageDecoder.messageProperties2String(msgInner.getProperties()));
         }
 
+
         CompletableFuture<PutMessageResult> putMessageResult = null;
         String transFlag = origProps.get(MessageConst.PROPERTY_TRANSACTION_PREPARED);
         if (transFlag != null && Boolean.parseBoolean(transFlag)) {
+            // Broker端在收到消息存储请求时，如果消息为prepare消息，则执行prepareMessage方法，否则走普通消息的存储流程
             if (this.brokerController.getBrokerConfig().isRejectTransactionMessage()) {
                 response.setCode(ResponseCode.NO_PERMISSION);
                 response.setRemark(
@@ -327,6 +329,8 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
                                 + "] sending transaction message is forbidden");
                 return CompletableFuture.completedFuture(response);
             }
+            // 事务消息与非事务消息发送流程的主要区别，如果是事务消息则备份消息的原主题与原消息消费队列，然后将主题变更为RMQ_SYS_TRANS_HALF_TOPIC，消费队列变更为0，
+            // 然后消息按照普通消息存储在commitlog文件进而转发到RMQ_SYS_TRANS_HALF_TOPIC主题对应的消息消费队列
             putMessageResult = this.brokerController.getTransactionalMessageService().asyncPrepareMessage(msgInner);
         } else {
             putMessageResult = this.brokerController.getMessageStore().asyncPutMessage(msgInner);
