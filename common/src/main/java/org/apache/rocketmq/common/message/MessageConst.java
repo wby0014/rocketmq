@@ -26,6 +26,7 @@ public class MessageConst {
     public static final String PROPERTY_RETRY_TOPIC = "RETRY_TOPIC";
     public static final String PROPERTY_REAL_TOPIC = "REAL_TOPIC";
     public static final String PROPERTY_REAL_QUEUE_ID = "REAL_QID";
+    // 事务消息标识
     public static final String PROPERTY_TRANSACTION_PREPARED = "TRAN_MSG";
     public static final String PROPERTY_PRODUCER_GROUP = "PGROUP";
     public static final String PROPERTY_MIN_OFFSET = "MIN_OFFSET";

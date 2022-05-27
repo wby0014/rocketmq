@@ -122,20 +122,25 @@ public class EndTransactionProcessor extends AsyncNettyRequestProcessor implemen
                     return null;
             }
         }
+        // 如果结束事务动作为提交事务，则执行提交事务逻辑
         OperationResult result = new OperationResult();
         if (MessageSysFlag.TRANSACTION_COMMIT_TYPE == requestHeader.getCommitOrRollback()) {
+            // 首先从结束事务请求命令中获取消息的物理偏移量（commitlogOffset）
             result = this.brokerController.getTransactionalMessageService().commitMessage(requestHeader);
             if (result.getResponseCode() == ResponseCode.SUCCESS) {
                 RemotingCommand res = checkPrepareMessage(result.getPrepareMessage(), requestHeader);
                 if (res.getCode() == ResponseCode.SUCCESS) {
+                    // 然后恢复消息的主题、消费队列，构建新的消息对象，由TransactionalMessageService#endMessageTransaction实现
                     MessageExtBrokerInner msgInner = endMessageTransaction(result.getPrepareMessage());
                     msgInner.setSysFlag(MessageSysFlag.resetTransactionValue(msgInner.getSysFlag(), requestHeader.getCommitOrRollback()));
                     msgInner.setQueueOffset(requestHeader.getTranStateTableOffset());
                     msgInner.setPreparedTransactionOffset(requestHeader.getCommitLogOffset());
                     msgInner.setStoreTimestamp(result.getPrepareMessage().getStoreTimestamp());
                     MessageAccessor.clearProperty(msgInner, MessageConst.PROPERTY_TRANSACTION_PREPARED);
+                    // 然后将消息再次存储在commitlog文件中，此时的消息主题则为业务方发送的消息，将被转发到对应的消息消费队列，供消息消费者消费
                     RemotingCommand sendResult = sendFinalMessage(msgInner);
                     if (sendResult.getCode() == ResponseCode.SUCCESS) {
+                        // 删除prepare消息,同样是将预处理消息存储在RMQ_SYS_TRANS_OP_HALF_TOPIC主题中，表示已处理过该消息
                         this.brokerController.getTransactionalMessageService().deletePrepareMessage(result.getPrepareMessage());
                     }
                     return sendResult;
@@ -147,6 +152,7 @@ public class EndTransactionProcessor extends AsyncNettyRequestProcessor implemen
             if (result.getResponseCode() == ResponseCode.SUCCESS) {
                 RemotingCommand res = checkPrepareMessage(result.getPrepareMessage(), requestHeader);
                 if (res.getCode() == ResponseCode.SUCCESS) {
+                    // 事务的回滚与提交的唯一差别是无须将消息恢复原主题，直接删除prepare消息即可，同样是将预处理消息存储在RMQ_SYS_TRANS_OP_HALF_TOPIC主题中，表示已处理过该消息
                     this.brokerController.getTransactionalMessageService().deletePrepareMessage(result.getPrepareMessage());
                 }
                 return res;
