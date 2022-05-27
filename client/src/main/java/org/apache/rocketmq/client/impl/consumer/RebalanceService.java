@@ -29,7 +29,7 @@ import org.apache.rocketmq.logging.InternalLogger;
  * 问题2：集群内多个消费者是如何负载主题下的多个消费队列，并且如果有新的消费者加入时，消息队列又会如何重新分布
  * 2. 由于每次进行队列重新负载时会从Broker实时查询出当前消费组内所有消费者，并且对消息队列、消费者列表进行排序，这样新加入的消费者就会在队列重新分布时分配到消费队列从而消费消息
  *
- * 注：RocketMQ消息拉取由PullMessage-Service与RebalanceService共同协作完成
+ * 注：RocketMQ消息拉取由PullMessageService与RebalanceService共同协作完成
  */
 public class RebalanceService extends ServiceThread {
     private static long waitInterval =
