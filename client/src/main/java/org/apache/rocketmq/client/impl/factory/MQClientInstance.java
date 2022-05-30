@@ -642,6 +642,7 @@ public class MQClientInstance {
 
                             // Update Pub info
                             if (!producerTable.isEmpty()) {
+                                // 根据topicRouteData中的List<QueueData>转换成topicPublishInfo的List<MessageQueue>列表
                                 TopicPublishInfo publishInfo = topicRouteData2TopicPublishInfo(topic, topicRouteData);
                                 publishInfo.setHaveTopicRouterInfo(true);
                                 Iterator<Entry<String, MQProducerInner>> it = this.producerTable.entrySet().iterator();

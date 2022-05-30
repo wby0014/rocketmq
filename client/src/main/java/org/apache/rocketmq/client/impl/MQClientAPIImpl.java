@@ -468,10 +468,12 @@ public class MQClientAPIImpl {
                 request = RemotingCommand.createRequestCommand(RequestCode.SEND_REPLY_MESSAGE, requestHeader);
             }
         } else {
+            // 构建批量消息发送命令
             if (sendSmartMsg || msg instanceof MessageBatch) {
                 SendMessageRequestHeaderV2 requestHeaderV2 = SendMessageRequestHeaderV2.createSendMessageRequestHeaderV2(requestHeader);
                 request = RemotingCommand.createRequestCommand(msg instanceof MessageBatch ? RequestCode.SEND_BATCH_MESSAGE : RequestCode.SEND_MESSAGE_V2, requestHeaderV2);
             } else {
+                // 同步发送消息的请求命令
                 request = RemotingCommand.createRequestCommand(RequestCode.SEND_MESSAGE, requestHeader);
             }
         }
@@ -569,6 +571,7 @@ public class MQClientAPIImpl {
                             producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), false);
                         } catch (Exception e) {
                             producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), true);
+                            // 重试的调用入口是在收到服务端响应包时进行的，如果出现网络异常、网络超时等将不会重试
                             onExceptionImpl(brokerName, msg, timeoutMillis - cost, request, sendCallback, topicPublishInfo, instance,
                                 retryTimesWhenSendFailed, times, e, context, false, producer);
                         }
@@ -599,6 +602,7 @@ public class MQClientAPIImpl {
         }
     }
 
+    // 异步发送，收到消息发送的结果包之后，再判断出未发送成功才触发重试机制的
     private void onExceptionImpl(final String brokerName,
         final Message msg,
         final long timeoutMillis,

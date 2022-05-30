@@ -370,6 +370,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
             if (request.getVersion() >= MQVersion.Version.V3_4_9.ordinal() && requestHeader.getMaxReconsumeTimes() != null) {
                 maxReconsumeTimes = requestHeader.getMaxReconsumeTimes();
             }
+            // 如果消息重试次数超过允许的最大重试次数，消息将进入到DLD延迟队列。延迟队列主题：%DLQ%+消费组名，延迟队列在消息消费时将重点讲解。
             int reconsumeTimes = requestHeader.getReconsumeTimes() == null ? 0 : requestHeader.getReconsumeTimes();
             if (reconsumeTimes >= maxReconsumeTimes) {
                 newTopic = MixAll.getDLQTopic(groupName);
@@ -723,6 +724,7 @@ public class SendMessageProcessor extends AbstractSendMessageProcessor implement
         }
 
         response.setCode(-1);
+        // 检查消息发送是否合理
         super.msgCheck(ctx, requestHeader, response);
         if (response.getCode() != -1) {
             return response;

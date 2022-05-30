@@ -545,6 +545,11 @@ public class MessageDecoder {
         return message;
     }
 
+    /**
+     * 批量消息进行编码， 服务端也会按照这样的结构进行相应解码
+     * @param messages
+     * @return
+     */
     public static byte[] encodeMessages(List<Message> messages) {
         //TO DO refactor, accumulate in one buffer, avoid copies
         List<byte[]> encodedMessages = new ArrayList<byte[]>(messages.size());

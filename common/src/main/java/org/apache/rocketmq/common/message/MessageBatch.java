@@ -22,15 +22,24 @@ import java.util.Iterator;
 import java.util.List;
 import org.apache.rocketmq.common.MixAll;
 
+/**
+ * 批量消息实体
+ * 单条消息发送时，消息体的内容将保存在body中。批量消息发送，需要将多条消息体的内容存储在body中，如何存储方便服务端正确解析出每条消息呢？
+ */
 public class MessageBatch extends Message implements Iterable<Message> {
 
     private static final long serialVersionUID = 621335151046335557L;
+    // 批量消息发送与单条消息发送的处理流程完全一样。
     private final List<Message> messages;
 
     private MessageBatch(List<Message> messages) {
         this.messages = messages;
     }
 
+    /**
+     * MessageBatch只需要将该集合中的每条消息的消息体body聚合成一个byte[]数值，在消息服务端能够从该byte[]数值中正确解析出消息即可
+     * @return
+     */
     public byte[] encode() {
         return MessageDecoder.encodeMessages(messages);
     }
@@ -45,6 +54,7 @@ public class MessageBatch extends Message implements Iterable<Message> {
         List<Message> messageList = new ArrayList<Message>(messages.size());
         Message first = null;
         for (Message message : messages) {
+            // 批量消息不支持延迟发送
             if (message.getDelayTimeLevel() > 0) {
                 throw new UnsupportedOperationException("TimeDelayLevel is not supported for batching");
             }

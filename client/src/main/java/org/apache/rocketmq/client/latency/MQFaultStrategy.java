@@ -56,7 +56,9 @@ public class MQFaultStrategy {
     }
 
     public MessageQueue selectOneMessageQueue(final TopicPublishInfo tpInfo, final String lastBrokerName) {
+        // 默认不启用Broker故障延迟机制
         if (this.sendLatencyFaultEnable) {
+            // 启用Broker故障延迟机制, 在Broker宕机期间，如果一次消息发送失败后，可以将该Broker暂时排除在消息队列的选择范围中。
             try {
                 int index = tpInfo.getSendWhichQueue().incrementAndGet();
                 for (int i = 0; i < tpInfo.getMessageQueueList().size(); i++) {
@@ -68,6 +70,7 @@ public class MQFaultStrategy {
                         return mq;
                 }
 
+                // 延迟机制接口
                 final String notBestBroker = latencyFaultTolerance.pickOneAtLeast();
                 int writeQueueNums = tpInfo.getQueueIdByBroker(notBestBroker);
                 if (writeQueueNums > 0) {
