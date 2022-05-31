@@ -420,7 +420,7 @@ public class PullMessageProcessor extends AsyncNettyRequestProcessor implements 
                     // 如果当开启了长轮询机制，PullRequestHoldService线程会每隔5s被唤醒去尝试检测是否有新消息的到来直到超时，如果被挂起，需要等待5s，消息拉取实时性比较差，为了避免这种情况，RocketMQ引入另外一种机制：当消息到达时唤醒挂起线程触发一次检查
                     if (brokerAllowSuspend && hasSuspendFlag) {
                         long pollingTimeMills = suspendTimeoutMillisLong;
-                        // 是否启用长轮询，如果支持长轮询模式，挂起超时时间来源于请求参数，PUSH模式默认为15s, PULL模式通过DefaultMQPullConsu-mer#brokerSuspenMaxTimeMillis设置，默认20s。然后创建拉取任务PullRequest并提交到PullRequestHoldService线程中。
+                        // 是否启用长轮询，如果支持长轮询模式，挂起超时时间来源于请求参数，PUSH模式默认为15s, PULL模式通过DefaultMQPullConsumer#brokerSuspenMaxTimeMillis设置，默认20s。然后创建拉取任务PullRequest并提交到PullRequestHoldService线程中。
                         if (!this.brokerController.getBrokerConfig().isLongPollingEnable()) {
                             pollingTimeMills = this.brokerController.getBrokerConfig().getShortPollingTimeMills();
                         }

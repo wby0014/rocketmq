@@ -2065,7 +2065,7 @@ public class DefaultMessageStore implements MessageStore {
                 if (result != null) {
                     try {
                         this.reputFromOffset = result.getStartOffset();
-                        // 从result返回的ByteBuffer中循环读取消息，一次读取一条，创建Dispatch-Request对象。DispatchRequest类图如图4-17所示，如果消息长度大于0，则调用doDispatch方法。
+                        // 从result返回的ByteBuffer中循环读取消息，一次读取一条，创建DispatchRequest对象。DispatchRequest类图如图4-17所示，如果消息长度大于0，则调用doDispatch方法。
                         // 最终将分别调用CommitLogDispatcherBuildConsumeQueue（构建消息消费队列）、CommitLogDispatcherBuildIndex（构建索引文件）
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
                             DispatchRequest dispatchRequest =
@@ -2075,7 +2075,7 @@ public class DefaultMessageStore implements MessageStore {
                             if (dispatchRequest.isSuccess()) {
                                 if (size > 0) {
                                     DefaultMessageStore.this.doDispatch(dispatchRequest);
-
+                                    // 开启了长轮询模式
                                     if (BrokerRole.SLAVE != DefaultMessageStore.this.getMessageStoreConfig().getBrokerRole()
                                             && DefaultMessageStore.this.brokerConfig.isLongPollingEnable()
                                             && DefaultMessageStore.this.messageArrivingListener != null) {
