@@ -1,0 +1,12 @@
+**RocketMQ主要的存储文件夹**
+1）commitlog：消息存储目录。
+2）config：运行期间一些配置信息，主要包括下列信息。
+`consumerFilter.json：主题消息过滤信息。`
+`consumerOffset.json：集群消费模式消息消费进度。`
+`delayOffset.json：延时消息队列拉取进度。`
+`subscriptionGroup.json：消息消费组配置信息。`
+`topics.json:topic配置属性。`
+3）consumequeue：消息消费队列存储目录。
+4）index：消息索引文件存储目录。
+5）abort：如果存在abort文件说明Broker非正常关闭，该文件默认启动时创建，正常退出之前删除。
+6）checkpoint：文件检测点，存储commitlog文件最后一次刷盘时间戳、consumequeue最后一次刷盘时间、index索引文件最后一次刷盘时间戳

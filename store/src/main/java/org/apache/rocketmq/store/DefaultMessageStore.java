@@ -70,33 +70,41 @@ import org.apache.rocketmq.store.index.QueryOffsetResult;
 import org.apache.rocketmq.store.schedule.ScheduleMessageService;
 import org.apache.rocketmq.store.stats.BrokerStatsManager;
 
+/**
+ * 消息存储的设计：commitog方便生产者、consumequeue方便消费者、index方便维护者
+ * 1.RocketMQ将所有主题的消息存储在同一个文件中，确保消息发送时顺序写文件，尽最大的能力确保消息发送的高性能与高吞吐量
+ * 2.为了提高消息消费的效率，RocketMQ引入了ConsumeQueue消息队列文件，每个消息主题包含多个消息消费队列，每一个消息队列有一个消息文件
+ * 3.IndexFile索引文件，其主要设计理念就是为了加速消息的检索性能，根据消息的属性快速从Commitlog文件中检索消息
+ * 4. 定时消息服务：每一个延迟级别对应一个消息消费队列，存储延迟队列的消息拉取进度
+ */
 public class DefaultMessageStore implements MessageStore {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
+    // 消息存储配置属性
     private final MessageStoreConfig messageStoreConfig;
-    // CommitLog
+    // CommitLog 文件的存储实现类
     private final CommitLog commitLog;
-
+    // 消息队列存储缓存表，按消息主题分组。
     private final ConcurrentMap<String/* topic */, ConcurrentMap<Integer/* queueId */, ConsumeQueue>> consumeQueueTable;
-
+    // 消息队列文件ConsumeQueue刷盘线程
     private final FlushConsumeQueueService flushConsumeQueueService;
-
+    // 清除CommitLog文件服务
     private final CleanCommitLogService cleanCommitLogService;
-
+    // 清除ConsumeQueue文件服务
     private final CleanConsumeQueueService cleanConsumeQueueService;
-
+    // 索引文件实现类
     private final IndexService indexService;
-
+    // MappedFile分配服务
     private final AllocateMappedFileService allocateMappedFileService;
-
+    // CommitLog消息分发，根据CommitLog文件构建ConsumeQueue、IndexFile文件
     private final ReputMessageService reputMessageService;
-
+    // 存储HA机制
     private final HAService haService;
 
     private final ScheduleMessageService scheduleMessageService;
 
     private final StoreStatsService storeStatsService;
-
+    // 消息堆内存缓存
     private final TransientStorePool transientStorePool;
 
     private final RunningFlags runningFlags = new RunningFlags();
@@ -105,17 +113,19 @@ public class DefaultMessageStore implements MessageStore {
     private final ScheduledExecutorService scheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor(new ThreadFactoryImpl("StoreScheduledThread"));
     private final BrokerStatsManager brokerStatsManager;
+    // 消息拉取长轮询模式消息达到监听器
     private final MessageArrivingListener messageArrivingListener;
+    // Broker配置属性
     private final BrokerConfig brokerConfig;
 
     private volatile boolean shutdown = true;
-
+    // 文件刷盘检测点
     private StoreCheckpoint storeCheckpoint;
 
     private AtomicLong printTimes = new AtomicLong(0);
 
     private final AtomicInteger lmqConsumeQueueNum = new AtomicInteger(0);
-
+    // CommitLog文件转发请求
     private final LinkedList<CommitLogDispatcher> dispatcherList;
 
     private RandomAccessFile lockFile;
@@ -207,7 +217,7 @@ public class DefaultMessageStore implements MessageStore {
                     new StoreCheckpoint(StorePathConfigHelper.getStoreCheckpoint(this.messageStoreConfig.getStorePathRootDir()));
 
                 this.indexService.load(lastExitOK);
-
+                // broker停止文件恢复
                 this.recover(lastExitOK);
 
                 log.info("load over, and the max phy offset = {}", this.getMaxPhyOffset());
@@ -274,6 +284,8 @@ public class DefaultMessageStore implements MessageStore {
             }
             log.info("[SetReputOffset] maxPhysicalPosInLogicQueue={} clMinOffset={} clMaxOffset={} clConfirmedOffset={}",
                 maxPhysicalPosInLogicQueue, this.commitLog.getMinOffset(), this.commitLog.getMaxOffset(), this.commitLog.getConfirmOffset());
+            // Broker服务器在启动时会启动ReputMessageService线程，并初始化一个非常关键的参数reputFfomOffset，该参数的含义是ReputMessageService从哪个物理偏移量开始转发消息给ConsumeQueue和IndexFile。
+            // 如果允许重复转发，reputFromOffset设置为CommitLog的提交指针；如果不允许重复转发，reputFromOffset设置为Commitlog的内存中最大偏移量
             this.reputMessageService.setReputFromOffset(maxPhysicalPosInLogicQueue);
             this.reputMessageService.start();
 
@@ -446,11 +458,12 @@ public class DefaultMessageStore implements MessageStore {
 
     @Override
     public CompletableFuture<PutMessageResult> asyncPutMessage(MessageExtBrokerInner msg) {
+        // 如果当前Broker停止工作或Broker为SLAVE角色或当前Rocket不支持写入则拒绝消息写入；
         PutMessageStatus checkStoreStatus = this.checkStoreStatus();
         if (checkStoreStatus != PutMessageStatus.PUT_OK) {
             return CompletableFuture.completedFuture(new PutMessageResult(checkStoreStatus, null));
         }
-
+        // 如果消息主题长度超过256个字符、消息属性长度超过65536个字符将拒绝该消息写入
         PutMessageStatus msgCheckStatus = this.checkMessage(msg);
         if (msgCheckStatus == PutMessageStatus.MESSAGE_ILLEGAL) {
             return CompletableFuture.completedFuture(new PutMessageResult(msgCheckStatus, null));
@@ -1336,7 +1349,7 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     private void addScheduleTask() {
-
+        // 过期文件删除任务
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -2052,7 +2065,8 @@ public class DefaultMessageStore implements MessageStore {
                 if (result != null) {
                     try {
                         this.reputFromOffset = result.getStartOffset();
-
+                        // 从result返回的ByteBuffer中循环读取消息，一次读取一条，创建Dispatch-Request对象。DispatchRequest类图如图4-17所示，如果消息长度大于0，则调用doDispatch方法。
+                        // 最终将分别调用CommitLogDispatcherBuildConsumeQueue（构建消息消费队列）、CommitLogDispatcherBuildIndex（构建索引文件）
                         for (int readSize = 0; readSize < result.getSize() && doNext; ) {
                             DispatchRequest dispatchRequest =
                                 DefaultMessageStore.this.commitLog.checkMessageAndReturnSize(result.getByteBuffer(), false, false);
