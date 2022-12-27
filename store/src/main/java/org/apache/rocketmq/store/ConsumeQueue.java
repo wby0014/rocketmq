@@ -380,6 +380,12 @@ public class ConsumeQueue {
         return this.minLogicOffset / CQ_STORE_UNIT_SIZE;
     }
 
+    /**
+     * Step2：依次将消息偏移量、消息长度、tag hashcode写入到ByteBuffer中，并根据consumeQueueOffset计算ConumeQueue中的物理地址，
+     * 将内容追加到ConsumeQueue的内存映射文件中（本操作只追击并不刷盘）, ConumeQueue的刷盘方式固定为异步刷盘模式
+     * @param request
+     * @param multiQueue
+     */
     public void putMessagePositionInfoWrapper(DispatchRequest request, boolean multiQueue) {
         final int maxRetries = 30;
         boolean canWrite = this.defaultMessageStore.getRunningFlags().isCQWriteable();

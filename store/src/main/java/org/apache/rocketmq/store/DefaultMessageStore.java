@@ -203,25 +203,50 @@ public class DefaultMessageStore implements MessageStore {
         boolean result = true;
 
         try {
+            /**
+             * Step1：判断上一次退出是否正常。其实现机制是Broker在启动时创建${ROCKET_HOME}/store/abort文件，在退出时通过注册JVM钩子函数删除abort文件。
+             * 如果下一次启动时存在abort文件。说明Broker是异常退出的，Commitlog与Consumequeue数据有可能不一致，需要进行修复
+             */
             boolean lastExitOK = !this.isTempFileExist();
             log.info("last shutdown {}", lastExitOK ? "normally" : "abnormally");
 
+            /**
+             * Step3：加载Commitlog文件，加载${ROCKET_HOME}/store/commitlog目录下所有文件并按照文件名排序。如果文件大小与配置文件的单个文件大小不一致，将忽略该目录下所有文件，然后创建MappedFile对象。
+             * 注意load方法将wrotePosition、flushedPosition、committedPosition三个指针都设置为文件大小。
+             */
             // load Commit Log
             result = result && this.commitLog.load();
 
+            /**
+             * Step4：加载消息消费队列，调用DefaultMessageStore#loadConsumeQueue，其思路与CommitLog大体一致，
+             * 遍历消息消费队列根目录，获取该Broker存储的所有主题，然后遍历每个主题目录，获取该主题下的所有消息消费队列，
+             * 然后分别加载每个消息消费队列下的文件，构建ConsumeQueue对象，主要初始化ConsumeQueue的topic、queueId、storePath、mappedFileSize属性。
+             */
             // load Consume Queue
             result = result && this.loadConsumeQueue();
 
             if (result) {
+                /**
+                 * Step5：加载存储检测点，检测点主要记录commitlog文件、Consumequeue文件、Index索引文件的刷盘点，将在下文的文件刷盘机制中再次提交
+                 */
                 this.storeCheckpoint =
                     new StoreCheckpoint(StorePathConfigHelper.getStoreCheckpoint(this.messageStoreConfig.getStorePathRootDir()));
 
+                /**
+                 * Step6：加载索引文件，如果上次异常退出，而且索引文件上次刷盘时间小于该索引文件最大的消息时间戳该文件将立即销毁。
+                 */
                 this.indexService.load(lastExitOK);
+                /**
+                 * Step7：根据Broker是否是正常停止执行不同的恢复策略，下文将分别介绍异常停止、正常停止的文件恢复机制。
+                 */
                 // broker停止文件恢复
                 this.recover(lastExitOK);
 
                 log.info("load over, and the max phy offset = {}", this.getMaxPhyOffset());
 
+                /**
+                 * Step2：加载延迟队列，RocketMQ定时消息相关，该部分将在第5章详细分析
+                 */
                 if (null != scheduleMessageService) {
                     result =  this.scheduleMessageService.load();
                 }
@@ -1348,8 +1373,13 @@ public class DefaultMessageStore implements MessageStore {
         log.info(fileName + (result ? " create OK" : " already exists"));
     }
 
+    /**
+     * 过期文件删除机制
+     */
     private void addScheduleTask() {
-        // 过期文件删除任务
+        /**
+         * RocketMQ会每隔10s调度一次cleanFilesPeriodically，检测是否需要清除过期文件。执行频率可以通过设置cleanResourceInterval，默认为10s
+         */
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
             @Override
             public void run() {
@@ -1398,6 +1428,11 @@ public class DefaultMessageStore implements MessageStore {
         }, 1000L, 10000L, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 分别执行清除消息存储文件（Commitlog文件）与消息消费队列文件（ConsumeQueue文件）。
+     * 由于消息消费队列文件与消息存储文件（Commitlog）共用一套过期文件删除机制，本书将重点讲解消息存储过期文件删除。
+     * 实现方法：DefaultMessageStore$CleanCommitLogService#deleteExpiredFiles。
+     */
     private void cleanFilesPeriodically() {
         this.cleanCommitLogService.run();
         this.cleanConsumeQueueService.run();
@@ -1508,6 +1543,9 @@ public class DefaultMessageStore implements MessageStore {
         return maxPhysicOffset;
     }
 
+    /**
+     * Step8：恢复ConsumeQueue文件后，将在CommitLog实例中保存每个消息消费队列当前的存储逻辑偏移量，这也是消息中不仅存储主题、消息队列ID还存储了消息队列偏移量的关键所在
+     */
     public void recoverTopicQueueTable() {
         HashMap<String/* topic-queueid */, Long/* offset */> table = new HashMap<String, Long>(1024);
         long minPhyOffset = this.commitLog.getMinOffset();
@@ -1560,6 +1598,11 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
+    /**
+     * Step1：根据消息主题与队列ID，先获取对应的ConumeQueue文件，其逻辑比较简单，因为每一个消息主题对应一个消息消费队列目录，
+     * 然后主题下每一个消息队列对应一个文件夹，然后取出该文件夹最后的ConsumeQueue文件即可。
+     * @param dispatchRequest
+     */
     public void putMessagePositionInfo(DispatchRequest dispatchRequest) {
         ConsumeQueue cq = this.findConsumeQueue(dispatchRequest.getTopic(), dispatchRequest.getQueueId());
         cq.putMessagePositionInfoWrapper(dispatchRequest, checkMultiDispatchQueue(dispatchRequest));
@@ -1709,6 +1752,13 @@ public class DefaultMessageStore implements MessageStore {
             }
         }
 
+        /**
+         * Step1：解释一下这个三个配置属性的含义。
+         * 1）fileReservedTime：文件保留时间，也就是从最后一次更新时间到现在，如果超过了该时间，则认为是过期文件，可以被删除。
+         * 2）deletePhysicFilesInterval：删除物理文件的间隔，因为在一次清除过程中，可能需要被删除的文件不止一个，该值指定两次删除文件的间隔时间。
+         * 3）destroyMapedFileIntervalForcibly：在清除过期文件时，如果该文件被其他线程所占用（引用次数大于0，比如读取消息），此时会阻止此次删除任务，同时在第一次试图删除该文件时记录当前时间戳，
+         * destroyMapedFileIntervalForcibly表示第一次拒绝删除之后能保留的最大时间，在此时间内，同样可以被拒绝删除，同时会将引用减少1000个，超过该时间间隔后，文件将被强制删除。
+         */
         private void deleteExpiredFiles() {
             int deleteCount = 0;
             long fileReservedTime = DefaultMessageStore.this.getMessageStoreConfig().getFileReservedTime();
@@ -1719,6 +1769,12 @@ public class DefaultMessageStore implements MessageStore {
             boolean spacefull = this.isSpaceToDelete();
             boolean manualDelete = this.manualDeleteFileSeveralTimes > 0;
 
+            /**
+             * Step2:RocketMQ在如下三种情况任意之一满足的情况下将继续执行删除文件操作。
+             * 1）指定删除文件的时间点，RocketMQ通过deleteWhen设置一天的固定时间执行一次删除过期文件操作，默认为凌晨4点。
+             * 2）磁盘空间是否充足，如果磁盘空间不充足，则返回true，表示应该触发过期文件删除操作。
+             * 3）预留，手工触发，可以通过调用excuteDeleteFilesManualy方法手工触发过期文件删除，目前RocketMQ暂未封装手工触发文件删除的命令。
+             */
             if (timeup || spacefull || manualDelete) {
 
                 if (manualDelete)
@@ -1770,6 +1826,19 @@ public class DefaultMessageStore implements MessageStore {
             return false;
         }
 
+        /**
+         * 1）首先解释一下几个参数的含义。
+         * diskMaxUsedSpaceRatio：表示commitlog、consumequeue文件所在磁盘分区的最大使用量，如果超过该值，则需要立即清除过期文件。
+         * cleanImmediately：表示是否需要立即执行清除过期文件操作。
+         * physicRatio：当前commitlog目录所在的磁盘分区的磁盘使用率，通过File#getTotal-Space（）获取文件所在磁盘分区的总容量，通过File#getFreeSpace（）获取文件所在磁盘分区剩余容量。
+         * diskSpaceWarningLevelRatio：通过系统参数-Drocketmq.broker.diskSpaceWarningLevelRatio设置，默认0.90。如果磁盘分区使用率超过该阈值，将设置磁盘不可写，此时会拒绝新消息的写入。
+         * diskSpaceCleanForciblyRatio：通过系统参数-Drocketmq.broker.diskSpaceCleanForciblyRatio设置，默认0.85。如果磁盘分区使用超过该阈值，建议立即执行过期文件清除，但不会拒绝新消息的写入。
+         * 2）如果当前磁盘分区使用率大于diskSpaceWarningLevelRatio，设置磁盘不可写，应该立即启动过期文件删除操作；
+         * 如果当前磁盘分区使用率大于diskSpaceCleanForciblyRatio，建议立即执行过期文件清除；
+         * 如果磁盘使用率低于diskSpaceCleanForciblyRatio将恢复磁盘可写；
+         * 如果当前磁盘使用率小于diskMaxUsedSpaceRatio则返回false，表示磁盘使用率正常，否则返回true，需要执行清除过期文件
+         * @return
+         */
         private boolean isSpaceToDelete() {
             double ratio = DefaultMessageStore.this.getMessageStoreConfig().getDiskMaxUsedSpaceRatio() / 100.0;
 

@@ -18,6 +18,23 @@ package org.apache.rocketmq.store;
 
 import java.util.Map;
 
+/**
+ * 下面让我们一一介绍DispatchRequest的核心属性。
+ * 1）String topic：消息主题名称。
+ * 2）int queueId：消息队列ID。
+ * 3）long commitLogOffset：消息物理偏移量。
+ * 4）int msgSize：消息长度。
+ * 5）long tagsCode：消息过滤tag hashcode。
+ * 6）long storeTimestamp：消息存储时间戳。
+ * 7）long consumeQueueOffset：消息队列偏移量。
+ * 8）String keys：消息索引key。多个索引key用空格隔开，例如“key1 key2”。
+ * 9）boolean success：是否成功解析到完整的消息。
+ * 10）String uniqKey：消息唯一键。
+ * 11）int sysFlag：消息系统标记。
+ * 12）long preparedTransactionOffset：消息预处理事务偏移量。
+ * 13）Map<String, String> propertiesMap：消息属性。
+ * 14）byte[] bitMap：位图。
+ */
 public class DispatchRequest {
     private final String topic;
     private final int queueId;

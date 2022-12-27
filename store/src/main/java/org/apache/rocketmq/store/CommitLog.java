@@ -213,6 +213,9 @@ public class CommitLog {
      * When the normal exit, data recovery, all memory data have been flush
      */
     public void recoverNormally(long maxPhyOffsetOfConsumeQueue) {
+        /**
+         * Step1:Broker正常停止再重启时，从倒数第三个文件开始进行恢复，如果不足3个文件，则从第一个文件开始恢复。checkCRCOnRecover参数设置在进行文件恢复时查找消息时是否验证CRC
+         */
         boolean checkCRCOnRecover = this.defaultMessageStore.getMessageStoreConfig().isCheckCRCOnRecover();
         final List<MappedFile> mappedFiles = this.mappedFileQueue.getMappedFiles();
         if (!mappedFiles.isEmpty()) {
@@ -221,11 +224,19 @@ public class CommitLog {
             if (index < 0)
                 index = 0;
 
+            /**
+             * Step2：解释一下两个局部变量，mappedFileOffset为当前文件已校验通过的offset,
+             * processOffset为Commitlog文件已确认的物理偏移量等于mappedFile.getFileFromOffset加上mappedFileOffset
+             */
             MappedFile mappedFile = mappedFiles.get(index);
             ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
             long processOffset = mappedFile.getFileFromOffset();
             long mappedFileOffset = 0;
             while (true) {
+                /**
+                 * Step3：遍历Commitlog文件，每次取出一条消息，如果查找结果为true并且消息的长度大于0表示消息正确，mappedFileOffset指针向前移动本条消息的长度；如果查找结果为true并且消息的长度等于0，
+                 * 表示已到该文件的末尾，如果还有下一个文件，则重置processOffset、mappedFileOffset重复步骤3，否则跳出循环；如果查找结构为false，表明该文件未填满所有消息，跳出循环，结束遍历文件
+                 */
                 DispatchRequest dispatchRequest = this.checkMessageAndReturnSize(byteBuffer, checkCRCOnRecover);
                 int size = dispatchRequest.getMsgSize();
                 // Normal data
@@ -255,10 +266,18 @@ public class CommitLog {
                     break;
                 }
             }
-
+            /**
+             * Step4：更新MappedFileQueue的flushedWhere与commiteedWhere指针
+             */
             processOffset += mappedFileOffset;
             this.mappedFileQueue.setFlushedWhere(processOffset);
             this.mappedFileQueue.setCommittedWhere(processOffset);
+            /**
+             * Step5：删除offset之后的所有文件。遍历目录下的文件，如果文件的尾部偏移量小于offset则跳过该文件，如果尾部的偏移量大于offset，
+             * 则进一步比较offset与文件的开始偏移量，如果offset大于文件的起始偏移量，说明当前文件包含了有效偏移里，设置MappedFile的flushedPosition和commitedPosition；
+             * 如果offset小于文件的起始偏移量，说明该文件是有效文件后面创建的，调用MappedFile#destory释放MappedFile占用的内存资源（内存映射与内存通道等），
+             * 然后加入到待删除文件列表中，最终调用deleteExpiredFile将文件从物理磁盘删除。
+             */
             this.mappedFileQueue.truncateDirtyFiles(processOffset);
 
             // Clear ConsumeQueue redundant data
@@ -556,7 +575,9 @@ public class CommitLog {
 
     private boolean isMappedFileMatchedRecover(final MappedFile mappedFile) {
         ByteBuffer byteBuffer = mappedFile.sliceByteBuffer();
-
+        /**
+         * Step1：首先判断文件的魔数，如果不是MESSAGE_MAGIC_CODE，返回false，表示该文件不符合commitlog消息文件的存储格式
+         */
         int magicCode = byteBuffer.getInt(MessageDecoder.MESSAGE_MAGIC_CODE_POSTION);
         if (magicCode != MESSAGE_MAGIC_CODE) {
             return false;
@@ -564,12 +585,21 @@ public class CommitLog {
 
         int sysFlag = byteBuffer.getInt(MessageDecoder.SYSFLAG_POSITION);
         int bornhostLength = (sysFlag & MessageSysFlag.BORNHOST_V6_FLAG) == 0 ? 8 : 20;
+        /**
+         * Step2：如果文件中第一条消息的存储时间等于0，返回false，说明该消息存储文件中未存储任何消息
+         */
         int msgStoreTimePos = 4 + 4 + 4 + 4 + 4 + 8 + 8 + 4 + 8 + bornhostLength;
         long storeTimestamp = byteBuffer.getLong(msgStoreTimePos);
         if (0 == storeTimestamp) {
             return false;
         }
-
+        /**
+         * Step3：对比文件第一条消息的时间戳与检测点，文件第一条消息的时间戳小于文件检测点说明该文件部分消息是可靠的，则从该文件开始恢复。
+         *        文件检测点中保存了Commitlog文件、消息消费队列（ConsumeQueue）、索引文件（IndexFile）的文件刷盘点，
+         *        RocketMQ默认选择这消息文件与消息消费队列这两个文件的时间刷盘点中最小值与消息文件第一消息的时间戳对比，如果messageIndexEnable为true，表示索引文件的刷盘时间点也参与计算。
+         * Step4：如果根据前3步算法找到MappedFile，则遍历MappedFile中的消息，验证消息的合法性，并将消息重新转发到消息消费队列与索引文件，该步骤在4.7.1节中已详细说明。
+         * Step5：如果未找到有效MappedFile，则设置commitlog目录的flushedWhere、committed-Where指针都为0，并销毁消息消费队列文件。
+         */
         if (this.defaultMessageStore.getMessageStoreConfig().isMessageIndexEnable()
             && this.defaultMessageStore.getMessageStoreConfig().isMessageIndexSafe()) {
             if (storeTimestamp <= this.defaultMessageStore.getStoreCheckpoint().getMinTimestampIndex()) {
@@ -757,6 +787,11 @@ public class CommitLog {
         if (tranType != MessageSysFlag.TRANSACTION_NOT_TYPE) {
             return CompletableFuture.completedFuture(new PutMessageResult(PutMessageStatus.MESSAGE_ILLEGAL, null));
         }
+        /**
+         * Step2：如果消息的延迟级别大于0，将消息的原主题名称与原消息队列ID存入消息属性中，
+         * 用延迟消息主题SCHEDULE_TOPIC、消息队列ID更新原先消息的主题与队列，
+         * 这是并发消息消费重试关键的一步，下一章会重点探讨消息重试机制与定时消息的实现原理
+         */
         if (messageExtBatch.getDelayTimeLevel() > 0) {
             return CompletableFuture.completedFuture(new PutMessageResult(PutMessageStatus.MESSAGE_ILLEGAL, null));
         }
@@ -1027,6 +1062,17 @@ public class CommitLog {
             return CommitRealTimeService.class.getSimpleName();
         }
 
+        /**
+         * Step1：首先解释三个配置参数的含义。
+         * 1）commitIntervalCommitLog:CommitRealTimeService线程间隔时间，默认200ms。
+         * 2）commitCommitLogLeastPages：一次提交任务至少包含页数，如果待提交数据不足，小于该参数配置的值，将忽略本次提交任务，默认4页。
+         * 3）commitDataThoroughInterval：两次真实提交最大间隔，默认200ms。
+         *
+         * Step2：如果距上次提交间隔超过commitDataThoroughInterval，则本次提交忽略commit-CommitLogLeastPages参数，也就是如果待提交数据小于指定页数，也执行提交操作
+         *
+         * Step3：执行提交操作，将待提交数据提交到物理文件的内存映射内存区，如果返回false，并不是代表提交失败，而是只提交了一部分数据，唤醒刷盘线程执行刷盘操作。
+         * 该线程每完成一次提交动作，将等待200ms再继续执行下一次提交任务
+         */
         @Override
         public void run() {
             CommitLog.log.info(this.getServiceName() + " service started");
@@ -1071,7 +1117,9 @@ public class CommitLog {
         }
     }
 
-    // 刷盘线程
+    /**
+     * 刷盘线程
+     */
     class FlushRealTimeService extends FlushCommitLogService {
         private long lastFlushTimestamp = 0;
         private long printTimes = 0;
@@ -1212,6 +1260,14 @@ public class CommitLog {
             }
         }
 
+        /**
+         * 执行刷盘操作，即调用MappedByteBuffer#force方法。
+         * 1）遍历同步刷盘任务列表，根据加入顺序逐一执行刷盘逻辑。
+         * 2）调用mappedFileQueeu#flush方法执行刷盘操作，最终会调用MappedByte Buffer# force（）方法，其具体实现已在4.4节中做了详细说明。
+         *   如果已刷盘指针大于等于提交的刷盘点，表示刷盘成功，每执行一次刷盘操作后，立即调用GroupCommitRequest#wakeupCustomer唤醒消息发送线程并通知刷盘结果。
+         * 3）处理完所有同步刷盘任务后，更新刷盘检测点StoreCheckpoint中的physicMsg-Timestamp，但并没有执行检测点的刷盘操作，刷盘检测点的刷盘操作将在刷写消息队列文件时触发。
+         * 同步刷盘的简单描述就是，消息生产者在消息服务端将消息内容追加到内存映射文件中（内存）后，需要同步将内存的内容立刻刷写到磁盘。通过调用内存映射文件（MappedByteBuffer的force方法）可将内存中的数据写入磁盘。
+         */
         private void doCommit() {
             if (!this.requestsRead.isEmpty()) {
                 for (GroupCommitRequest req : this.requestsRead) {
@@ -1239,6 +1295,9 @@ public class CommitLog {
             }
         }
 
+        /**
+         * GroupCommitService每处理一批同步刷盘请求（requestsRead容器中请求）后“休息”10ms，然后继续处理下一批，其任务的核心实现为doCommit方法
+         */
         public void run() {
             CommitLog.log.info(this.getServiceName() + " service started");
 
@@ -1349,6 +1408,10 @@ public class CommitLog {
             ByteBuffer preEncodeBuffer = msgInner.getEncodedBuff();
             final int msgLen = preEncodeBuffer.getInt(0);
 
+            /**
+             * Step10：如果消息长度+END_FILE_MIN_BLANK_LENGTH大于CommitLog文件的空闲空间，则返回AppendMessageStatus.END_OF_FILE, Broker会重新创建一个新的CommitLog文件来存储该消息。
+             * 从这里可以看出，每个CommitLog文件最少会空闲8个字节，高4字节存储当前文件剩余空间，低4字节存储魔数：CommitLog.BLANK_MAGIC_CODE
+             */
             // Determines whether there is sufficient free space
             if ((msgLen + END_FILE_MIN_BLANK_LENGTH) > maxBlank) {
                 this.msgStoreItemMemory.clear();
@@ -1358,6 +1421,7 @@ public class CommitLog {
                 this.msgStoreItemMemory.putInt(CommitLog.BLANK_MAGIC_CODE);
                 // 3 The remaining space may be any value
                 // Here the length of the specially set maxBlank
+
                 final long beginTimeMills = CommitLog.this.defaultMessageStore.now();
                 byteBuffer.put(this.msgStoreItemMemory.array(), 0, 8);
                 return new AppendMessageResult(AppendMessageStatus.END_OF_FILE, wroteOffset,
@@ -1378,7 +1442,10 @@ public class CommitLog {
             // refresh store time stamp in lock
             preEncodeBuffer.putLong(pos, msgInner.getStoreTimestamp());
 
-
+            /**
+             * Step11：将消息内容存储到ByteBuffer中，然后创建AppendMessageResult。
+             * 这里只是将消息存储在MappedFile对应的内存映射Buffer中，并没有刷写到磁盘，追加结果如AppendMessageResult
+             */
             final long beginTimeMills = CommitLog.this.defaultMessageStore.now();
             // Write messages to the queue buffer
             byteBuffer.put(preEncodeBuffer);
@@ -1386,6 +1453,9 @@ public class CommitLog {
             AppendMessageResult result = new AppendMessageResult(AppendMessageStatus.PUT_OK, wroteOffset, msgLen, msgIdSupplier,
                 msgInner.getStoreTimestamp(), queueOffset, CommitLog.this.defaultMessageStore.now() - beginTimeMills);
 
+            /**
+             * Step12：更新消息队列逻辑偏移量
+             */
             switch (tranType) {
                 case MessageSysFlag.TRANSACTION_PREPARED_TYPE:
                 case MessageSysFlag.TRANSACTION_ROLLBACK_TYPE:
