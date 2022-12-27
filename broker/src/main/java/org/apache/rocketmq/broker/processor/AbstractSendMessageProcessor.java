@@ -164,13 +164,13 @@ public abstract class AbstractSendMessageProcessor extends AsyncNettyRequestProc
     }
 
     /**
-     * 检查消息发送是否合理
-     * 1. 检查该Broker是否有写权限
-     * 2. 检查该Topic是否可以进行消息发送。主要针对默认主题，默认主题不能发送消息，仅仅供路由查找
-     * 3. 在NameServer端存储主题的配置信息，默认路径：${ROCKET_HOME}/store/config/topic.json。下面是主题存储信息。
-     *    order：是否是顺序消息；perm：权限码；readQueueNums：读队列数量；writeQueueNums：写队列数量；topicName：主题名称；topicSysFlag:topic Flag，
-     *    当前版本暂为保留；topicFilterType：主题过滤方式，当前版本仅支持SINGLE_TAG
-     * 4. 检查队列，如果队列不合法，返回错误码
+     * Step1：检查消息发送是否合理，这里完成了以下几件事情。
+     * 1）检查该Broker是否有写权限。
+     * 2）检查该Topic是否可以进行消息发送。主要针对默认主题，默认主题不能发送消息，仅仅供路由查找。
+     * 3）在NameServer端存储主题的配置信息，默认路径：${ROCKET_HOME}/store/config/topic.json。下面是主题存储信息。order：是否是顺序消息；perm：权限码；readQueueNums：读队列数量；writeQueueNums：写队列数量；topicName：主题名称；topicSysFlag:topic Flag，当前版本暂为保留；topicFilterType：主题过滤方式，当前版本仅支持SINGLE_TAG。
+     * 4）检查队列，如果队列不合法，返回错误码。
+     * Step2：如果消息重试次数超过允许的最大重试次数，消息将进入到DLD延迟队列。延迟队列主题：%DLQ%+消费组名，延迟队列在消息消费时将重点讲解。
+     * Step3：调用DefaultMessageStore#putMessage进行消息存储。关于消息存储的实现细节将在第4章重点剖析。
      * @param ctx
      * @param requestHeader
      * @param response
