@@ -77,6 +77,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      *
      * See <a href="http://rocketmq.apache.org/docs/core-concept/">here</a> for further discussion.
      */
+    // consumerGroup：消费者所属组
     private String consumerGroup;
 
     /**
@@ -91,6 +92,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      *
      * This field defaults to clustering.
      */
+    // 消息消费模式，分为集群模式、广播模式，默认为集群模式。
     private MessageModel messageModel = MessageModel.CLUSTERING;
 
     /**
@@ -124,6 +126,7 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      * </li>
      * </ul>
      */
+    // 根据消息进度从消息服务器拉取不到消息时重新计算消费策略。
     private ConsumeFromWhere consumeFromWhere = ConsumeFromWhere.CONSUME_FROM_LAST_OFFSET;
 
     /**
@@ -137,31 +140,37 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     /**
      * Queue allocation algorithm specifying how message queues are allocated to each consumer clients.
      */
+    // 集群模式下消息队列负载策略。
     private AllocateMessageQueueStrategy allocateMessageQueueStrategy;
 
     /**
      * Subscription relationship
      */
+    // 订阅信息
     private Map<String /* topic */, String /* sub expression */> subscription = new HashMap<String, String>();
 
     /**
      * Message listener
      */
+    // 消息业务监听器
     private MessageListener messageListener;
 
     /**
      * Offset Storage
      */
+    // 消息消费进度存储器
     private OffsetStore offsetStore;
 
     /**
      * Minimum consumer thread number
      */
+    // 消费者最小线程数
     private int consumeThreadMin = 20;
 
     /**
      * Max consumer thread number
      */
+    // 消费者最大线程数，由于消费者线程池使用无界队列，故消费者线程个数其实最多只有consumeThreadMin个。
     private int consumeThreadMax = 20;
 
     /**
@@ -172,11 +181,17 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     /**
      * Concurrently max span offset.it has no effect on sequential consumption
      */
+    /**
+     * 并发消息消费时处理队列最大跨度，默认2000，表示如果消息处理队列中偏移量最大的消息与偏移量最小的消息的跨度超过2000则延迟50毫秒后再拉取消息
+     */
     private int consumeConcurrentlyMaxSpan = 2000;
 
     /**
      * Flow control threshold on queue level, each message queue will cache at most 1000 messages by default,
      * Consider the {@code pullBatchSize}, the instantaneous value may exceed the limit
+     */
+    /**
+     * 默认值1000，每1000次流控后打印流控日志。
      */
     private int pullThresholdForQueue = 1000;
 
@@ -214,20 +229,32 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
     /**
      * Message pull Interval
      */
+    /**
+     * 推模式下拉取任务间隔时间，默认一次拉取任务完成继续拉取。
+     */
     private long pullInterval = 0;
 
     /**
      * Batch consumption size
+     */
+    /**
+     * 消息并发消费时一次消费消息条数，通俗点说就是每次传入MessageListtener#consumeMessage中的消息条数
      */
     private int consumeMessageBatchMaxSize = 1;
 
     /**
      * Batch pull size
      */
+    /**
+     * 每次消息拉取所拉取的条数，默认32条
+     */
     private int pullBatchSize = 32;
 
     /**
      * Whether update subscription relationship when every pull
+     */
+    /**
+     * 是否每次拉取消息都更新订阅信息，默认为false。
      */
     private boolean postSubscriptionWhenPull = false;
 
@@ -243,15 +270,24 @@ public class DefaultMQPushConsumer extends ClientConfig implements MQPushConsume
      *
      * If messages are re-consumed more than {@link #maxReconsumeTimes} before success.
      */
+    /**
+     * 最大消费重试次数。如果消息消费次数超过maxReconsumeTimes还未成功，则将该消息转移到一个失败队列，等待被删除。
+     */
     private int maxReconsumeTimes = -1;
 
     /**
      * Suspending pulling time for cases requiring slow pulling like flow-control scenario.
      */
+    /**
+     * 延迟将该队列的消息提交到消费者线程的等待时间，默认延迟1s。
+     */
     private long suspendCurrentQueueTimeMillis = 1000;
 
     /**
      * Maximum amount of time in minutes a message may block the consuming thread.
+     */
+    /**
+     * 消息消费超时时间，默认为15，单位为分钟。
      */
     private long consumeTimeout = 15;
 

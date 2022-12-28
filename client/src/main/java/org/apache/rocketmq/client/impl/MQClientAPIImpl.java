@@ -729,6 +729,9 @@ public class MQClientAPIImpl {
         final CommunicationMode communicationMode,
         final PullCallback pullCallback
     ) throws RemotingException, MQBrokerException, InterruptedException {
+        /**
+         * 根据消息拉取命令Code:RequestCode.PULL_MESSAGE，很容易找到Brokder端处理消息拉取的入口：org.apache.rocketmq.broker.processor.PullMessageProcessor#processRequest
+         */
         RemotingCommand request = RemotingCommand.createRequestCommand(RequestCode.PULL_MESSAGE, requestHeader);
 
         switch (communicationMode) {
@@ -790,6 +793,14 @@ public class MQClientAPIImpl {
         return this.processPullResponse(response, addr);
     }
 
+    /**
+     * Step1：根据响应结果解码成PullResultExt对象，此时只是从网络中读取消息列表到byte[] messageBinary属性
+     * @param response
+     * @param addr
+     * @return
+     * @throws MQBrokerException
+     * @throws RemotingCommandException
+     */
     private PullResult processPullResponse(
         final RemotingCommand response,
         final String addr) throws MQBrokerException, RemotingCommandException {

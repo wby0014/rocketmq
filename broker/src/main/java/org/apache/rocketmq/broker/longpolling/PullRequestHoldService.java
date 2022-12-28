@@ -46,6 +46,11 @@ public class PullRequestHoldService extends ServiceThread {
         this.brokerController = brokerController;
     }
 
+    /**
+     * 根据消息主题与消息队列构建key，从pullRequestTable中获取该主题@队列对应的ManyPullRequest，
+     *  通过ConcurrentMap的并发特性，维护主题@队列的ManyPullRequest，然后将PullRequest放入ManyPullRequest。
+     *  ManyPullRequest对象内部持有一个PullRequest列表，表示同一主题@队列的累积拉取消息任务
+    */
     public void suspendPullRequest(final String topic, final int queueId, final PullRequest pullRequest) {
         String key = this.buildKey(topic, queueId);
         ManyPullRequest mpr = this.pullRequestTable.get(key);
@@ -100,6 +105,9 @@ public class PullRequestHoldService extends ServiceThread {
         return PullRequestHoldService.class.getSimpleName();
     }
 
+    /**
+     * 遍历拉取任务表，根据主题与队列获取消息消费队列最大偏移量，如果该偏移量大于待拉取偏移量，说明有新的消息到达，调用notifyMessageArriving触发消息拉取
+     */
     protected void checkHoldRequest() {
         for (String key : this.pullRequestTable.keySet()) {
             String[] kArray = key.split(TOPIC_QUEUEID_SEPARATOR);
@@ -108,6 +116,7 @@ public class PullRequestHoldService extends ServiceThread {
                 int queueId = Integer.parseInt(kArray[1]);
                 final long offset = this.brokerController.getMessageStore().getMaxOffsetInQueue(topic, queueId);
                 try {
+                    // 触发消息拉取
                     this.notifyMessageArriving(topic, queueId, offset);
                 } catch (Throwable e) {
                     log.error("check hold request failed. topic={}, queueId={}", topic, queueId, e);
@@ -125,7 +134,12 @@ public class PullRequestHoldService extends ServiceThread {
         String key = this.buildKey(topic, queueId);
         ManyPullRequest mpr = this.pullRequestTable.get(key);
         if (mpr != null) {
-            // 获取当前该主题、队列所有的挂起拉取任务
+            /**
+             * Step1：首先从ManyPullRequest中获取当前该主题、队列所有的挂起拉取任务。
+             * 值得注意的是该方法使用了synchronized，说明该数据结构会存在并发访问，
+             * 该属性是PullRequestHoldService线程的私有属性，会存在并发？答案是存在并发，
+             * 下文重点提到的ReputMessageService内部将持有PullRequestHoldService，也会唤醒挂起线程从而执行消息拉取尝试。
+             */
             List<PullRequest> requestList = mpr.cloneListAndClear();
             if (requestList != null) {
                 List<PullRequest> replayList = new ArrayList<PullRequest>();
@@ -135,7 +149,9 @@ public class PullRequestHoldService extends ServiceThread {
                     if (newestOffset <= request.getPullFromThisOffset()) {
                         newestOffset = this.brokerController.getMessageStore().getMaxOffsetInQueue(topic, queueId);
                     }
-
+                    /**
+                     * Step2：如果消息队列的最大偏移量大于待拉取偏移量，如果消息匹配则调用executeRequestWhenWakeup将消息返回给消息拉取客户端，否则等待下一次尝试
+                     */
                     if (newestOffset > request.getPullFromThisOffset()) {
                         boolean match = request.getMessageFilter().isMatchedByConsumeQueue(tagsCode,
                             new ConsumeQueueExt.CqExtUnit(tagsCode, msgStoreTime, filterBitMap));

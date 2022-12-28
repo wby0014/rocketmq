@@ -219,6 +219,13 @@ public abstract class RebalanceImpl {
         }
     }
 
+    /**
+     * 每个DefaultMQPushConsumerImpl都持有一个单独的RebalanceImpl对象，该方法主要是遍历订阅信息对每个主题的队列进行重新负载。
+     * RebalanceImpl的Map<String, SubscriptionData> subTable在调用消费者DefaultMQPushConsumerImpl#subscribe方法时填充。
+     * 如果订阅信息发送变化，例如调用了unsubscribe方法，则需要将不关心的主题消费队列从processQueueTable中移除。
+     * 接下来重点分析RebalanceImpl#rebalanceByTopic来分析RocketMQ是如何针对单个主题进行消息队列重新负载（以集群模式）
+     * @param isOrder
+     */
     public void doRebalance(final boolean isOrder) {
         Map<String, SubscriptionData> subTable = this.getSubscriptionInner();
         if (subTable != null) {
@@ -422,7 +429,7 @@ public abstract class RebalanceImpl {
                 }
             }
         }
-
+        // Step5：将PullRequest加入到PullMessageService中，以便唤醒PullMessageService线程
         this.dispatchPullRequest(pullRequestList);
 
         return changed;

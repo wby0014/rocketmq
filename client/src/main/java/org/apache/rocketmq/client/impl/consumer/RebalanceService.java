@@ -32,6 +32,7 @@ import org.apache.rocketmq.logging.InternalLogger;
  * 注：RocketMQ消息拉取由PullMessageService与RebalanceService共同协作完成
  */
 public class RebalanceService extends ServiceThread {
+    // RebalanceService线程默认每隔20s执行一次mqClientFactory.doRebalance（）方法，可以使用-Drocketmq.client.rebalance.waitInterval=interval来改变默认值
     private static long waitInterval =
         Long.parseLong(System.getProperty(
             "rocketmq.client.rebalance.waitInterval", "20000"));
@@ -48,6 +49,7 @@ public class RebalanceService extends ServiceThread {
 
         while (!this.isStopped()) {
             this.waitForRunning(waitInterval);
+            // MQClientIinstance遍历已注册的消费者，对消费者执行doRebalance（）方法
             this.mqClientFactory.doRebalance();
         }
 

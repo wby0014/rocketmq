@@ -625,8 +625,10 @@ public class DefaultMessageStore implements MessageStore {
 
         final long maxOffsetPy = this.commitLog.getMaxOffset();
 
+        // Step3：根据主题名称与队列编号获取消息消费队列
         ConsumeQueue consumeQueue = findConsumeQueue(topic, queueId);
         if (consumeQueue != null) {
+            // Step4：消息偏移量异常情况校对下一次拉取偏移量。
             minOffset = consumeQueue.getMinOffsetInQueue();
             maxOffset = consumeQueue.getMaxOffsetInQueue();
 
@@ -703,7 +705,7 @@ public class DefaultMessageStore implements MessageStore {
 
                                 continue;
                             }
-
+                            // Step5：如果待拉取偏移量大于minOffset并且小于maxOffset，从当前offset处尝试拉取32条消息，根据消息队列偏移量（ConsumeQueue）从commitlog文件中查找消息
                             SelectMappedBufferResult selectResult = this.commitLog.getMessage(offsetPy, sizePy);
                             if (null == selectResult) {
                                 if (getResult.getBufferTotalSize() == 0) {

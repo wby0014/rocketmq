@@ -43,6 +43,12 @@ public class PullMessageService extends ServiceThread {
         this.mQClientFactory = mQClientFactory;
     }
 
+    /**
+     * 原来，PullMessageService提供延迟添加与立即添加2种方式将PullRequest放入到pullRequestQueue中。
+     * 那PullRequest在什么时候创建呢？executePullRequestImmediately方法调用链如图5-3所示
+     * @param pullRequest
+     * @param timeDelay
+     */
     public void executePullRequestLater(final PullRequest pullRequest, final long timeDelay) {
         if (!isStopped()) {
             this.scheduledExecutorService.schedule(new Runnable() {
@@ -77,6 +83,7 @@ public class PullMessageService extends ServiceThread {
     }
 
     private void pullMessage(final PullRequest pullRequest) {
+        // 根据消费组名从MQClientInstance中获取消费者内部实现类MQConsumerInner，令人意外的是这里将consumer强制转换为DefaultMQPushConsumerImpl
         final MQConsumerInner consumer = this.mQClientFactory.selectConsumer(pullRequest.getConsumerGroup());
         if (consumer != null) {
             DefaultMQPushConsumerImpl impl = (DefaultMQPushConsumerImpl) consumer;
@@ -89,10 +96,12 @@ public class PullMessageService extends ServiceThread {
     @Override
     public void run() {
         log.info(this.getServiceName() + " service started");
-
+        // 这是一种通用的设计技巧，stopped声明为volatile，每执行一次业务逻辑检测一下其运行状态，可以通过其他线程将stopped设置为true从而停止该线程
         while (!this.isStopped()) {
             try {
+                // 从pullRequestQueue中获取一个PullRequest消息拉取任务，如果pullRequestQueue为空，则线程将阻塞，直到有拉取任务被放入
                 PullRequest pullRequest = this.pullRequestQueue.take();
+                // 调用pullMessage方法进行消息拉取。
                 this.pullMessage(pullRequest);
             } catch (InterruptedException ignored) {
             } catch (Exception e) {

@@ -76,6 +76,7 @@ public class ConsumeMessageOrderlyService implements ConsumeMessageService {
 
         this.defaultMQPushConsumer = this.defaultMQPushConsumerImpl.getDefaultMQPushConsumer();
         this.consumerGroup = this.defaultMQPushConsumer.getConsumerGroup();
+        // 初始化实例参数，这里的关键是消息任务队列为LinkedBlockingQueue，消息消费线程池最大运行时线程个数为consumeThreadMin, consumeThreadMax参数将失效
         this.consumeRequestQueue = new LinkedBlockingQueue<Runnable>();
 
         String consumeThreadPrefix = null;
