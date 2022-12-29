@@ -21,6 +21,12 @@ package org.apache.rocketmq.broker.filtersrv;
 import org.apache.rocketmq.logging.InternalLogger;
 
 public class FilterServerUtil {
+
+    /**
+     * Step3：利用Runtime.getRuntime（）直接指向shell脚本，这里主要是向读者展示一下JAVA调用shell脚本的一种实现方法
+     * @param shellString
+     * @param log
+     */
     public static void callShell(final String shellString, final InternalLogger log) {
         Process process = null;
         try {

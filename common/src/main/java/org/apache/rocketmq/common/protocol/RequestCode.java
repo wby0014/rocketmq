@@ -134,7 +134,9 @@ public class RequestCode {
 
     public static final int GET_TOPICS_BY_CLUSTER = 224;
 
+    // 注册FilterServer到Broker
     public static final int REGISTER_FILTER_SERVER = 301;
+    // 注册filterClass源码，等FilterServer端处理class源码并编译实例化为MessageFilter
     public static final int REGISTER_MESSAGE_FILTER_CLASS = 302;
 
     public static final int QUERY_CONSUME_TIME_SPAN = 303;

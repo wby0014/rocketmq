@@ -35,6 +35,11 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.remoting.common.RemotingUtil;
 
+/**
+ * FilterServer与Broker通过心跳维持FilterServer在Broker端的注册，同样在Broker每隔10s扫描一下该注册表，如果30s内未收到FilterServer的注册信息，将关闭Broker与FilterServer的连接。
+ * Broker为了避免Broker端FilterServer的异常退出导致FilterServer进程越来越少，同样提供一个定时任务每30s检测一下当前存活的FilterServer进程的个数，
+ * 如果当前存活的FilterServer进程个数小于配置的数量，则自动创建一个FilterrServer进程
+ */
 public class FilterServerManager {
 
     public static final long FILTER_SERVER_MAX_IDLE_TIME_MILLS = 30000;
@@ -65,6 +70,9 @@ public class FilterServerManager {
     }
 
     public void createFilterServer() {
+        /**
+         * Step1：读取配置文件中的属性filterServerNums，如果当前运行的FilterServer进程数量小于filterServerNums则构建shell命名并调用
+         */
         int more =
             this.brokerController.getBrokerConfig().getFilterServerNums() - this.filterServerTable.size();
         String cmd = this.buildStartCommand();
@@ -73,6 +81,10 @@ public class FilterServerManager {
         }
     }
 
+    /**
+     * 构建启动命令
+     * @return
+     */
     private String buildStartCommand() {
         String config = "";
         if (BrokerStartup.configFile != null) {
@@ -98,7 +110,12 @@ public class FilterServerManager {
         this.scheduledExecutorService.shutdown();
     }
 
+
     public void registerFilterServer(final Channel channel, final String filterServerAddr) {
+        /**
+         * 实现过程是先从filterServerTable中以网络通道为key获取FilterServerInfo，
+         * 如果不等于空，则更新一下上次更新时间为当前时间，否则创建一个新的FilterServerInfo对象并加入到filterServerTable路由表中
+         */
         FilterServerInfo filterServerInfo = this.filterServerTable.get(channel);
         if (filterServerInfo != null) {
             filterServerInfo.setLastUpdateTimestamp(System.currentTimeMillis());

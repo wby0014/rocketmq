@@ -972,7 +972,7 @@ public class DefaultMQPushConsumerImpl implements MQConsumerInner {
                 return;
             }
             /**
-             * Step1：消费者订阅消息主题与消息过滤表达式。构建订阅信息并加入到RebalanceImpl中，以便RebalanceImpl进行消息队列负载
+             * Step1：消费者订阅消息主题与消息过滤表达式。构建订阅信息并加入到RebalanceImpl中，以便RebalanceImpl进行消息队列负载，创建消息拉取任务，以便PullMessageService线程拉取消息
              */
             SubscriptionData subscriptionData = FilterAPI.build(topic,
                 messageSelector.getExpression(), messageSelector.getExpressionType());
