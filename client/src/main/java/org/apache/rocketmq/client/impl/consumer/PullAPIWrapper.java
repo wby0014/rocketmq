@@ -71,6 +71,7 @@ public class PullAPIWrapper {
         final SubscriptionData subscriptionData) {
         PullResultExt pullResultExt = (PullResultExt) pullResult;
 
+        // 会根据主服务器的建议拉取brokerId来更新pullFromWhichNodeTable， 那消息服务端是根据何种规则来建议哪个消息消费队列该从哪台Broker服务器上拉取消息呢？见DefaultMessageStore#getMessage
         this.updatePullFromWhichNode(mq, pullResultExt.getSuggestWhichBrokerId());
         if (PullStatus.FOUND == pullResult.getPullStatus()) {
             // 将消息字节数组解码成消息列表填充msgFoundList
@@ -234,6 +235,14 @@ public class PullAPIWrapper {
         throw new MQClientException("The broker[" + mq.getBrokerName() + "] not exist", null);
     }
 
+    /**
+     * 根据消息消费队列获取brokerId
+     * 从pullFromWhichNodeTable缓存表中获取该消息消费队列的brokerId，如果找到，则返回，否则返回brokerName的主节点。
+     * 那pullFromWhichNodeTable消息从何而来呢？原来消息消费拉取线程PullMessageService根据PullRequest请求从主服务器拉取消息后会返回下一次建议拉取的brokerId，
+     * 消息消费者线程在收到消息后，会根据主服务器的建议拉取brokerId来更新pullFromWhichNodeTable
+     * @param mq
+     * @return
+     */
     public long recalculatePullFromWhichNode(final MessageQueue mq) {
         if (this.isConnectBrokerByUser()) {
             return this.defaultBrokerId;
