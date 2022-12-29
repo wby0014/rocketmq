@@ -131,6 +131,10 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
         }
     }
 
+    /**
+     * RMQ_SYS_TRANS_HALF_TOPIC:prepare消息的主题，事务消息首先进入到该主题。
+     * RMQ_SYS_TRANS_OP_HALF_TOPIC：当消息服务器收到事务消息的提交或回滚请求后，会将消息存储在该主题下
+     */
     @Override
     public void check(long transactionTimeout, int transactionCheckMax,
         AbstractTransactionalMessageCheckListener listener) {
@@ -194,7 +198,11 @@ public class TransactionalMessageServiceImpl implements TransactionalMessageServ
                  * 1）如果操作队列（RMQ_SYS_TRANS_OP_HALF_TOPIC）中没有已处理消息并且已经超过应用程序事务结束时间即transactionTimeOut值。
                  * 2）如果操作队列不为空并且最后一条消息的存储时间已经超过transactionTimeOut值。
                  * 代码@11：如果需要发送事务状态回查消息，则先将消息再次发送到RMQ_SYS_TRANS_HALF_TOPIC主题中，发送成功则返回true，否则返回false，这里还有一个实现关键点
-                 * 代码@11：发送具体的事务回查命令，使用线程池来异步发送回查消息，为了回查消费进度保存的简化，只要发送了回查消息，当前回查进度会向前推动，如果回查失败，上一步骤新增的消息将可以再次发送回查消息，那如果回查消息发送成功，会不会下一次又重复发送回查消息呢？这个可以根据OP队列中的消息来判断是否重复，如果回查消息发送成功并且消息服务器完成提交或回滚操作，这条消息会发送到OP队列中，然后首先会通过fillOpRemoveMap根据处理进度获取一批已处理的消息，来与消息判断是否重复，由于fillopRemoveMap一次只拉32条消息，那又如何保证一定能拉取到与当前消息的处理记录呢？其实就是通过代码@10，如果此批消息最后一条未超过事务延迟消息，则继续拉取更多消息进行判断（@12）和（@14）, OP队列也会随着回查进度的推进而推进。
+                 * 代码@11：发送具体的事务回查命令，使用线程池来异步发送回查消息，为了回查消费进度保存的简化，只要发送了回查消息，当前回查进度会向前推动，如果回查失败，
+                 *    上一步骤新增的消息将可以再次发送回查消息，那如果回查消息发送成功，会不会下一次又重复发送回查消息呢？这个可以根据OP队列中的消息来判断是否重复，
+                 *    如果回查消息发送成功并且消息服务器完成提交或回滚操作，这条消息会发送到OP队列中，然后首先会通过fillOpRemoveMap根据处理进度获取一批已处理的消息，
+                 *    来与消息判断是否重复，由于fillopRemoveMap一次只拉32条消息，那又如何保证一定能拉取到与当前消息的处理记录呢？
+                 *    其实就是通过代码@10，如果此批消息最后一条未超过事务延迟消息，则继续拉取更多消息进行判断（@12）和（@14）, OP队列也会随着回查进度的推进而推进。
                  * 代码@12：如果无法判断是否发送回查消息，则加载更多的已处理消息进行筛选。
                  * 代码@13：保存（Prepare）消息队列的回查进度。
                  * 代码@14：保存处理队列（OP）的进度。
