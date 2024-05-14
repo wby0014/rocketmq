@@ -70,8 +70,10 @@ public abstract class ConfigManager {
     public synchronized void persist() {
         String jsonString = this.encode(true);
         if (jsonString != null) {
+            // 持久化到文件delayOffset.json中
             String fileName = this.configFilePath();
             try {
+                // 延迟消息的offset持久化到文件中
                 MixAll.string2File(jsonString, fileName);
             } catch (IOException e) {
                 log.error("persist file " + fileName + " exception", e);

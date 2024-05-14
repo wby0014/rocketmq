@@ -549,7 +549,7 @@ public class MQClientAPIImpl {
                             }
                         } catch (Throwable e) {
                         }
-
+                        // 更新当前接收消息的broker的延迟情况，延迟策略有一个标准接口LatencyFaultTolerance，可以自定义实现自己的延迟策略
                         producer.updateFaultItem(brokerName, System.currentTimeMillis() - responseFuture.getBeginTimestamp(), false);
                         return;
                     }
