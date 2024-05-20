@@ -156,6 +156,7 @@ public class BrokerOuterAPI {
                         } catch (Exception e) {
                             log.warn("registerBroker Exception, {}", namesrvAddr, e);
                         } finally {
+                            // 减少计数,依次对每个nameserver进行通信注册
                             countDownLatch.countDown();
                         }
                     }
@@ -163,6 +164,7 @@ public class BrokerOuterAPI {
             }
 
             try {
+                // 等待所有注册broker的线程请求完成
                 countDownLatch.await(timeoutMills, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
             }

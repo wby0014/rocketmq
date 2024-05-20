@@ -871,14 +871,17 @@ public class BrokerController {
 
     public void start() throws Exception {
         if (this.messageStore != null) {
+            // 存储层服务，比如CommitLog、ConsumeQueue存储管理
             this.messageStore.start();
         }
 
         if (this.remotingServer != null) {
+            // 普通通道请求处理服务。一般的请求都是在这里被处理的
             this.remotingServer.start();
         }
 
         if (this.fastRemotingServer != null) {
+            // VIP 通道请求处理服务。如果普通通道比较忙，那么可以使用VIP通道，一般作为客户端降级使用
             this.fastRemotingServer.start();
         }
 
@@ -887,18 +890,22 @@ public class BrokerController {
         }
 
         if (this.brokerOuterAPI != null) {
+            // Broker访问对外接口的封装对象
             this.brokerOuterAPI.start();
         }
 
         if (this.pullRequestHoldService != null) {
+            // Pull长轮询服务
             this.pullRequestHoldService.start();
         }
 
         if (this.clientHousekeepingService != null) {
+            // 清理心跳超时的生产者、消费者、过滤服务器
             this.clientHousekeepingService.start();
         }
 
         if (this.filterServerManager != null) {
+            // 过滤服务器管理
             this.filterServerManager.start();
         }
 
@@ -913,6 +920,7 @@ public class BrokerController {
             @Override
             public void run() {
                 try {
+                    // 将Broker信息注册到Namesrv
                     BrokerController.this.registerBrokerAll(true, false, brokerConfig.isForceRegister());
                 } catch (Throwable e) {
                     log.error("registerBrokerAll Exception", e);
