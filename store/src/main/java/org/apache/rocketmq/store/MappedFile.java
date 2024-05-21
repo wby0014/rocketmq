@@ -42,6 +42,9 @@ import org.apache.rocketmq.store.config.FlushDiskType;
 import org.apache.rocketmq.store.util.LibC;
 import sun.nio.ch.DirectBuffer;
 
+/**
+ * MappedFileQueue可以看作是${ROCKET_HOME}/store/commitlog文件夹，而MappedFile则对应该文件夹下一个个的文件。
+ */
 public class MappedFile extends ReferenceResource {
     public static final int OS_PAGE_SIZE = 1024 * 4;
     protected static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);

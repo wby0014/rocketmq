@@ -27,6 +27,12 @@ import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.MappedFile;
 
+/**
+ * 是一个RocketMQ实现的Hash索引，主要在用户用消息key查询时使用
+ * 在RocketMQ中同时存在多个Index File文件，这些文件按照消息产生的时间顺序排列
+ * 每个Index File文件包含文件头、Hash槽位、索引数据
+ * Index File的索引设计在一定程度上参考了Java中的HashMap设计，只是当Index File遇到Hash碰撞时只会用链表，而Java 8中在一定情况下链表会转化为红黑树
+ */
 public class IndexFile {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private static int hashSlotSize = 4;

@@ -597,6 +597,10 @@ public class DefaultMessageStore implements MessageStore {
         return commitLog;
     }
 
+    /**
+     * 按照位点查消息
+     * broker在处理客户端拉取消息请求时是怎么查询消息的
+     */
     public GetMessageResult getMessage(final String group, final String topic, final int queueId, final long offset,
         final int maxMsgNums,
         final MessageFilter messageFilter) {
@@ -2018,6 +2022,9 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
+    /**
+     * Consume Queue的索引信息被保存到Page Cache后，其持久化的过程和CommitLog异步刷盘的过程类似，执行DefaultMessageStore.FlushConsumeQueueService服务
+     */
     class FlushConsumeQueueService extends ServiceThread {
         private static final int RETRY_TIMES_OVER = 3;
         private long lastFlushTimestamp = 0;
@@ -2087,7 +2094,9 @@ public class DefaultMessageStore implements MessageStore {
         }
     }
 
-    // ReputMessageService线程主要是根据Commitlog将消息转发到ConsumeQueue、Index等文件
+    /**
+     * ReputMessageService线程主要是根据Commitlog将消息转发到ConsumeQueue、Index等文件
+     */
     class ReputMessageService extends ServiceThread {
 
         private volatile long reputFromOffset = 0;

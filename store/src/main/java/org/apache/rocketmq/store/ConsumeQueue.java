@@ -29,6 +29,13 @@ import org.apache.rocketmq.logging.InternalLoggerFactory;
 import org.apache.rocketmq.store.config.BrokerRole;
 import org.apache.rocketmq.store.config.StorePathConfigHelper;
 
+/**
+ * 消费队列，主要用于消费拉取消息、更新消费位点等所用的索引, 文件内保存了消息的物理位点、消息体大小、消息Tag的Hash值
+ * 物理位点：消息在CommitLog中的位点值
+ * 消息体大小：包含消息Topic值大小、CRC值大小、消息体大小等全部数据的总大小，单位是字节
+ * Tag的Hash值：由org.apache.rocketmq.store.MessageExtBrokerInner.tagsString2tagsCode（）方法计算得来。如果消息有Tag值，那么该值可以通过String的Hashcode获得
+ *
+ */
 public class ConsumeQueue {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
