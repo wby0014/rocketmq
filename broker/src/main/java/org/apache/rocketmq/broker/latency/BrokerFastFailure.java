@@ -62,15 +62,20 @@ public class BrokerFastFailure {
         }, 1000, 10, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * 在Broker处理发送消息请求时，由于处理器SendMessageProcessor本身是一个线程池服务，所以设计了快速失败逻辑，方便在高峰时自我保护
+     */
     private void cleanExpiredRequest() {
         while (this.brokerController.getMessageStore().isOSPageCacheBusy()) {
             try {
+                // 系统繁忙，发送消息请求队列快速失败处理
                 if (!this.brokerController.getSendThreadPoolQueue().isEmpty()) {
                     final Runnable runnable = this.brokerController.getSendThreadPoolQueue().poll(0, TimeUnit.SECONDS);
                     if (null == runnable) {
                         break;
                     }
-
+                    // 当操作系统Page Cache繁忙时，会将发送消息请求从发送消息请求线程池工作队列中取出来，直接返回SYSTEM_BUSY。
+                    // 如果此种情况持续发生说明系统已经不堪重负，需要增加系统资源或者扩容来减轻当前Broker的压力
                     final RequestTask rt = castRunnable(runnable);
                     rt.returnResponse(RemotingSysResponseCode.SYSTEM_BUSY, String.format("[PCBUSY_CLEAN_QUEUE]broker busy, start flow control for a while, period in queue: %sms, size of queue: %d", System.currentTimeMillis() - rt.getCreateTimestamp(), this.brokerController.getSendThreadPoolQueue().size()));
                 } else {

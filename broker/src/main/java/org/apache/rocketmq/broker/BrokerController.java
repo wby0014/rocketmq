@@ -933,6 +933,7 @@ public class BrokerController {
         }
 
         if (this.brokerFastFailure != null) {
+            // 处理快速失败的异常
             this.brokerFastFailure.start();
         }
 

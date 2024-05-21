@@ -77,6 +77,7 @@ public class CommitLog {
 
     private volatile long beginTimeInLock = 0;
 
+    // Broker按照时间和物理的offset顺序写CommitLog文件，每次写的时候需要加锁
     protected final PutMessageLock putMessageLock;
 
     private volatile Set<String> fullStorePaths = Collections.emptySet();
@@ -816,7 +817,7 @@ public class CommitLog {
 
         PutMessageContext putMessageContext = new PutMessageContext(generateKey(pmThreadLocal.getKeyBuilder(), messageExtBatch));
         messageExtBatch.setEncodedBuff(batchEncoder.encode(messageExtBatch, putMessageContext));
-
+        // 加锁
         putMessageLock.lock();
         try {
             long beginLockTimestamp = this.defaultMessageStore.getSystemClock().now();
@@ -900,9 +901,12 @@ public class CommitLog {
                 GroupCommitRequest request = new GroupCommitRequest(result.getWroteOffset() + result.getWroteBytes(),
                         this.defaultMessageStore.getMessageStoreConfig().getSyncFlushTimeout());
                 flushDiskWatcher.add(request);
+                // 保存同步刷盘请求
                 service.putRequest(request);
+                // 等待刷盘完成
                 return request.future();
             } else {
+                // 不等待刷盘结果，直接返回刷盘ok
                 service.wakeup();
                 return CompletableFuture.completedFuture(PutMessageStatus.PUT_OK);
             }
@@ -912,6 +916,9 @@ public class CommitLog {
             if (!this.defaultMessageStore.getMessageStoreConfig().isTransientStorePoolEnable()) {
                 flushCommitLogService.wakeup();
             } else  {
+                // 唤醒转存服务，CommitRealTimeService，
+                // 通过异步转存服务，将 DM 中的数据再次存储到 Page Cache中，
+                // 以供异步刷盘服务FlushRealTimeService将Page Cache刷到磁盘中
                 commitLogService.wakeup();
             }
             return CompletableFuture.completedFuture(PutMessageStatus.PUT_OK);
@@ -1053,6 +1060,11 @@ public class CommitLog {
         protected static final int RETRY_TIMES_OVER = 10;
     }
 
+    /**
+     * 异步转存服务。
+     * Broker通过配置读写分离将消息写入直接内存（Direct Memory，简称 DM），
+     * 然后通过异步转存服务，将 DM 中的数据再次存储到 Page Cache中，以供异步刷盘服务将Page Cache刷到磁盘中
+     */
     class CommitRealTimeService extends FlushCommitLogService {
 
         private long lastCommitTimestamp = 0;
@@ -1096,6 +1108,7 @@ public class CommitLog {
                     if (!result) {
                         this.lastCommitTimestamp = end; // result = false means some data committed.
                         //now wake up flush thread.
+                        // 唤醒异步刷盘线程 FlushRealTimeService
                         flushCommitLogService.wakeup();
                     }
 
@@ -1118,7 +1131,7 @@ public class CommitLog {
     }
 
     /**
-     * 刷盘线程
+     * 异步刷盘线程
      */
     class FlushRealTimeService extends FlushCommitLogService {
         private long lastFlushTimestamp = 0;
@@ -1230,7 +1243,7 @@ public class CommitLog {
     }
 
     /**
-     * GroupCommit Service
+     * GroupCommit Service， 同步刷盘
      */
     class GroupCommitService extends FlushCommitLogService {
         // 这是一个设计亮点，避免了任务提交与任务执行的锁冲突。
@@ -1278,7 +1291,7 @@ public class CommitLog {
                         CommitLog.this.mappedFileQueue.flush(0);
                         flushOK = CommitLog.this.mappedFileQueue.getFlushedWhere() >= req.getNextOffset();
                     }
-
+                    // 刷盘成功，唤醒等待刷盘请求锁的存储消息线程，告知刷盘成功
                     req.wakeupCustomer(flushOK ? PutMessageStatus.PUT_OK : PutMessageStatus.FLUSH_DISK_TIMEOUT);
                 }
 
@@ -1404,7 +1417,9 @@ public class CommitLog {
                 default:
                     break;
             }
-
+            // 序列化消息，并将序列化结果保存到ByteBuffer中（文件内存映射的Page Cache或 Direct Memory，简称 DM）。
+            // 特别地，如果将刷盘设置为异步刷盘，那么当ransientStorePoolEnable=true时，会先写入DM，
+            // DM中的数据再异步写入文件内存映射的Page Cache中。因为消费者始终是从Page Cache中读取消息消费的，所以这个机制也称为“读写分离”
             ByteBuffer preEncodeBuffer = msgInner.getEncodedBuff();
             final int msgLen = preEncodeBuffer.getInt(0);
 

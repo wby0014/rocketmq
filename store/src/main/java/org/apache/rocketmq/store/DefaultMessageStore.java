@@ -457,7 +457,7 @@ public class DefaultMessageStore implements MessageStore {
         } else {
             this.printTimes.set(0);
         }
-
+        // 检查操作系统page cache是否繁忙
         if (this.isOSPageCacheBusy()) {
             return PutMessageStatus.OS_PAGECACHE_BUSY;
         }
@@ -575,9 +575,11 @@ public class DefaultMessageStore implements MessageStore {
 
     @Override
     public boolean isOSPageCacheBusy() {
+        // CommitLog加锁开始时间，写CommitLog成功后，该值为0
         long begin = this.getCommitLog().getBeginTimeInLock();
+        // 当前时间和CommitLog持有锁时间的差值
         long diff = this.systemClock.now() - begin;
-
+        // 如果 isOSPageCacheBusy（）方法返回 true，则表示当前有消息正在写入CommitLog，并且持有锁的时间超过设置的阈值
         return diff < 10000000
             && diff > this.messageStoreConfig.getOsPageCacheBusyTimeOutMills();
     }
