@@ -364,6 +364,9 @@ public class MappedFileQueue {
         final int deleteFilesInterval,
         final long intervalForcibly,
         final boolean cleanImmediately) {
+        // 第一步：克隆全部的 CommitLog 文件。CommitLog 文件可能随时有数据写入，为了不影响正常写入，所以克隆一份来操作。
+        // 第二步：检查每一个CommitLog文件是否过期，如果已过期则立即通过调用destroy（）方法进行删除。
+        // 在删除前会做一系列检查：检查文件被引用的次数、清理映射的所有内存数据对象、释放内存。清理完成后，删除物理文件
         Object[] mfs = this.copyMappedFiles(0);
 
         if (null == mfs)

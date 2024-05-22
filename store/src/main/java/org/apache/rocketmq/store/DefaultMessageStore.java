@@ -1760,7 +1760,7 @@ public class DefaultMessageStore implements MessageStore {
         public void run() {
             try {
                 this.deleteExpiredFiles();
-
+                // 第一次删除有可能失败，比如有线程引用该过期文件，内存映射清理失败等，都可能导致删除失败。如果文件已经关闭，删除前检查没有通过，则可以通过第二次删除来处理
                 this.redeleteHangedFile();
             } catch (Throwable e) {
                 DefaultMessageStore.log.warn(this.getServiceName() + " service has exception. ", e);
