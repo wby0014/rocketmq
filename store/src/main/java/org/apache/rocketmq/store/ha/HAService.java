@@ -41,6 +41,9 @@ import org.apache.rocketmq.store.DefaultMessageStore;
 import org.apache.rocketmq.store.PutMessageSpinLock;
 import org.apache.rocketmq.store.PutMessageStatus;
 
+/**
+ * slave从master同步commitLog数据
+ */
 public class HAService {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
 
@@ -114,6 +117,7 @@ public class HAService {
 
     public void start() throws Exception {
         this.acceptSocketService.beginAccept();
+        // 启动主从异步赋值服务
         this.acceptSocketService.start();
         this.groupTransferService.start();
         this.haClient.start();
@@ -162,6 +166,7 @@ public class HAService {
 
     /**
      * Listens to slave connections to create {@link HAConnection}.
+     * master接受slave发送的上报offset请求的服务
      */
     class AcceptSocketService extends ServiceThread {
         // Broker服务监听套接字（本地IP+端口号）。
@@ -267,7 +272,9 @@ public class HAService {
     /**
      * GroupTransferService主从同步阻塞实现，如果是同步主从模式，消息发送者将消息刷写到磁盘后，需要继续等待新数据被传输到从服务器，
      * 从服务器数据的复制是在另外一个线程HAConnection中去拉取，所以消息发送者在这里需要等待数据传输的结果，
-     * Group TransferService就是实现该功能，该类的整体结构与同步刷盘实现类（Commit Log$-GroupCommitService）类似
+     * Group TransferService就是实现该功能，该类的整体结构与同步刷盘实现类（CommitLog$-GroupCommitService）类似
+     *
+     * 同步复制时，提供新数据通知服务
      */
     class GroupTransferService extends ServiceThread {
 
@@ -351,6 +358,9 @@ public class HAService {
         }
     }
 
+    /**
+     * slave处理与master通信的客户端封装
+     */
     class HAClient extends ServiceThread {
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024 * 4;
         private final AtomicReference<String> masterAddress = new AtomicReference<>();

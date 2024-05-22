@@ -29,6 +29,9 @@ import org.apache.rocketmq.remoting.common.RemotingUtil;
 import org.apache.rocketmq.remoting.netty.NettySystemConfig;
 import org.apache.rocketmq.store.SelectMappedBufferResult;
 
+/**
+ * slave连接信息
+ */
 public class HAConnection {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private final HAService haService;
@@ -37,7 +40,9 @@ public class HAConnection {
     private WriteSocketService writeSocketService;
     private ReadSocketService readSocketService;
 
+    // 表示slave请求同步的位点值
     private volatile long slaveRequestOffset = -1;
+    // 表示slave已经保存的位点值， 都使用volatile
     private volatile long slaveAckOffset = -1;
 
     public HAConnection(final HAService haService, final SocketChannel socketChannel) throws IOException {
@@ -83,6 +88,10 @@ public class HAConnection {
         return socketChannel;
     }
 
+    /**
+     * master:读取slave发送的offset请求
+     * slave：读取master发送过来的commitlog数据
+     */
     class ReadSocketService extends ServiceThread {
         private static final int READ_MAX_BUFFER_SIZE = 1024 * 1024;
         private final Selector selector;
@@ -214,6 +223,10 @@ public class HAConnection {
         }
     }
 
+    /**
+     * master:将commitLog写入网络，发送给slave
+     * slave：上报本地offset的请求
+     */
     class WriteSocketService extends ServiceThread {
         private final Selector selector;
         private final SocketChannel socketChannel;
