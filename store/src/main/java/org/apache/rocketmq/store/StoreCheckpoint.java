@@ -27,13 +27,21 @@ import org.apache.rocketmq.common.constant.LoggerName;
 import org.apache.rocketmq.logging.InternalLogger;
 import org.apache.rocketmq.logging.InternalLoggerFactory;
 
+/**
+ * checkpoint是检查点文件，保存broker最后正常存储各种数据的时间
+ * Broker 在启动时会初始化 abort、checkpoint 两个文件。正常关闭进程时会删除 abort文件，将 checkpoint 文件刷盘
+ * 异常关闭时，通常来不及删除 abort 文件。由此，在重新启动Broker时会根据abort判断是否需要异常停止进程，而后恢复数据
+ */
 public class StoreCheckpoint {
     private static final InternalLogger log = InternalLoggerFactory.getLogger(LoggerName.STORE_LOGGER_NAME);
     private final RandomAccessFile randomAccessFile;
     private final FileChannel fileChannel;
     private final MappedByteBuffer mappedByteBuffer;
+    // commitLog异步、同步刷盘成功后，更新这个时间，最后一条刷盘的commitLog存储时间
     private volatile long physicMsgTimestamp = 0;
+    // consumeQueue刷盘成功、添加索引成功，更新这个时间，最后一条写consumeQueue消息的存储时间
     private volatile long logicsMsgTimestamp = 0;
+    // Index file刷盘成功，更新这个时间，被刷盘的Index file的最后更新时间
     private volatile long indexMsgTimestamp = 0;
 
     public StoreCheckpoint(final String scpPath) throws IOException {

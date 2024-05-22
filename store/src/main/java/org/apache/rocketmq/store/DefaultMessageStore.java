@@ -197,6 +197,8 @@ public class DefaultMessageStore implements MessageStore {
     }
 
     /**
+     * 启动加载全部数据
+     * 关机恢复流程
      * @throws IOException
      */
     public boolean load() {
@@ -239,7 +241,7 @@ public class DefaultMessageStore implements MessageStore {
                 /**
                  * Step7：根据Broker是否是正常停止执行不同的恢复策略，下文将分别介绍异常停止、正常停止的文件恢复机制。
                  */
-                // broker停止文件恢复
+                // broker停止恢复文件流程,  该过程主要恢复了CommitLog、Consume Queue、Index File的数据到内存中，也设置了刷盘指针、提交指针等
                 this.recover(lastExitOK);
 
                 log.info("load over, and the max phy offset = {}", this.getMaxPhyOffset());
