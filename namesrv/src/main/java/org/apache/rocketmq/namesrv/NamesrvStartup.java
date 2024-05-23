@@ -131,6 +131,12 @@ public class NamesrvStartup {
         return controller;
     }
 
+    /**
+     * namesrv 启动流程
+     * @param controller
+     * @return
+     * @throws Exception
+     */
     public static NamesrvController start(final NamesrvController controller) throws Exception {
 
         if (null == controller) {
@@ -143,6 +149,8 @@ public class NamesrvStartup {
             System.exit(-3);
         }
 
+        // 添加 shutdown hook，优雅关闭
+        // 通常Namesrv的停止是通过关闭命令./mqshutdown namesrv来实现的。这个命令通过调用kill命令将关闭进程通知发给JVM，JVM调用关机Hook执行停止逻辑
         Runtime.getRuntime().addShutdownHook(new ShutdownHookThread(log, new Callable<Void>() {
             @Override
             public Void call() throws Exception {

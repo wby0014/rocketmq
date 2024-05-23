@@ -439,6 +439,12 @@ public class RouteInfoManager {
         return null;
     }
 
+    /**
+     * 扫描没有活跃的Broker，将其剔除
+     * 该方法会扫描全部已经注册的 Broker，依次将每一个 Broker 心跳的最后更新时间和当前时间做对比，
+     * 如果 Broker 心跳的最后更新时间超过BROKER_CHANNEL_EXPIRED_TIME （1000×60×2=120s），
+     * 则将Broker剔除。从此没有心跳的Broker从路由中被剔除，而客户端无任何感知
+     */
     public void scanNotActiveBroker() {
         Iterator<Entry<String, BrokerLiveInfo>> it = this.brokerLiveTable.entrySet().iterator();
         while (it.hasNext()) {

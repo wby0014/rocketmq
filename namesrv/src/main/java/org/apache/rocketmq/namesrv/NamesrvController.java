@@ -82,8 +82,10 @@ public class NamesrvController {
         this.remotingExecutor =
             Executors.newFixedThreadPool(nettyServerConfig.getServerWorkerThreads(), new ThreadFactoryImpl("RemotingExecutorThread_"));
 
+        // 注册处理器
         this.registerProcessor();
 
+        // 定期扫描已经下线的broker，将其主动剔除
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
@@ -153,6 +155,7 @@ public class NamesrvController {
     }
 
     public void start() throws Exception {
+        // 通信服务启动
         this.remotingServer.start();
 
         if (this.fileWatchService != null) {

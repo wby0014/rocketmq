@@ -792,7 +792,7 @@ public class BrokerController {
             this.scheduledExecutorService.awaitTermination(5000, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
         }
-
+        // broker主动关闭时，调用namesrv接口取消注册broker，即namesrv剔除掉broker
         this.unregisterBrokerAll();
 
         if (this.sendMessageExecutor != null) {
@@ -915,6 +915,7 @@ public class BrokerController {
             this.registerBrokerAll(true, false, true);
         }
 
+        // 每隔30s秒注册Broker信息到NameServer，俗称心跳
         this.scheduledExecutorService.scheduleAtFixedRate(new Runnable() {
 
             @Override
